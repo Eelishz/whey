@@ -21,7 +21,12 @@ pub fn build(b: *std.Build) void {
     exe.linkLibrary(libwhey);
 
     switch (target.result.os.tag) {
-        .linux => exe.linkSystemLibrary("X11"),
+        .linux => {
+            libwhey.linkLibC();
+            libwhey.addIncludePath(.{ .src_path = .{ .sub_path = "/usr/include/", .owner = b } });
+            exe.linkSystemLibrary("X11");
+            exe.linkLibC();
+        },
         .windows => exe.linkSystemLibrary("user32"),
         else => {},
     }

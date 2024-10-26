@@ -23,11 +23,16 @@ const Camera = extern struct {
     fov: f32,
 };
 
-export fn test_print() void {
+pub export const Event = enum {};
+
+pub export fn test_print() void {
     std.debug.print("Hello from lib\n", .{});
 }
 
-fn _update() callconv(.C) void {}
+fn _update(delta_time: f32, event: Event) callconv(.C) void {
+    _ = delta_time;
+    _ = event;
+}
 
 pub fn wWinMain(
     h_instace: std.os.windows.HINSTANCE,
@@ -41,7 +46,7 @@ pub fn wWinMain(
     return 0;
 }
 
-export fn initialize(update: *const fn () callconv(.C) void) void {
+pub export fn initialize(update: *const fn (delta_time: f32, event: Event) callconv(.C) void) void {
     switch (builtin.os.tag) {
         .windows => {
             _ = std.start.call_wWinMain();

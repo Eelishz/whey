@@ -81,7 +81,7 @@ extern "user32" fn GetMessageA(message: *MSG, handle: ?windows.HWND, filter_min:
 
 extern "user32" fn TranslateMessage(message: *const MSG) windows.BOOL;
 
-extern "user32" fn DispatchMessage(message: *const MSG) callconv(.C) windows.BOOL;
+extern "user32" fn DispatchMessageA(message: *const MSG) callconv(.C) windows.LRESULT;
 
 extern "user32" fn DefWindowProcA(
     handle: windows.HWND,
@@ -90,11 +90,11 @@ extern "user32" fn DefWindowProcA(
     l_param: windows.LPARAM,
 ) windows.LRESULT;
 
-extern "user32" fn PostQuitMessageA(message: windows.INT) callconv(.C) void;
+extern "user32" fn PostQuitMessage(message: windows.INT) callconv(.C) void;
 
 fn window_procedure(handle: windows.HWND, message: windows.UINT, w_param: windows.WPARAM, l_param: windows.LPARAM) callconv(.C) windows.LRESULT {
     switch (message) {
-        Event.destroy => PostQuitMessageA(0),
+        Event.destroy => PostQuitMessage(0),
         else => return DefWindowProcA(handle, message, w_param, l_param),
     }
     return 0;
@@ -115,7 +115,7 @@ pub fn initialize(update: *const fn () callconv(.C) void, instance: windows.HINS
     var message: MSG = undefined;
     while (GetMessageA(&message, null, 0, 0) > 0) {
         _ = TranslateMessage(&message);
-        _ = DispatchMessage(&message);
+        _ = DispatchMessageA(&message);
         update();
     }
 
