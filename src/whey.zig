@@ -3,14 +3,16 @@ const builtin = @import("builtin");
 const windows = @import("windows.zig");
 const linux = @import("linux.zig");
 
-const Vec2f = extern struct {
+pub const update_fn = *const fn (delta_time: f32, event: Event) callconv(.C) void;
+
+pub const Vec2f = struct {
     x: f32,
     y: f32,
 };
 
-const Texture = extern struct {};
+pub const Texture = struct {};
 
-const Sprite = extern struct {
+pub const Sprite = struct {
     texture: *Texture,
     altas_width: i32,
     altas_hight: i32,
@@ -18,44 +20,13 @@ const Sprite = extern struct {
     z_index: i32,
 };
 
-const Camera = extern struct {
+pub const Camera = struct {
     world_position: Vec2f,
     fov: f32,
 };
 
-pub export const Event = enum {};
+pub const Event = enum { None };
 
-pub export fn test_print() void {
+pub fn test_print() void {
     std.debug.print("Hello from lib\n", .{});
-}
-
-fn _update(delta_time: f32, event: Event) callconv(.C) void {
-    _ = delta_time;
-    _ = event;
-}
-
-pub fn wWinMain(
-    h_instace: std.os.windows.HINSTANCE,
-    h_prev_instance: ?std.os.windows.HINSTANCE,
-    p_cmd_line: std.os.windows.PWSTR,
-    n_cmd_show: std.os.windows.INT,
-) std.os.windows.INT {
-    _ = h_prev_instance;
-    _ = p_cmd_line;
-    windows.initialize(_update, h_instace, n_cmd_show) catch @panic("window init failed");
-    return 0;
-}
-
-pub export fn initialize(update: *const fn (delta_time: f32, event: Event) callconv(.C) void) void {
-    switch (builtin.os.tag) {
-        .windows => {
-            _ = std.start.call_wWinMain();
-        },
-        .linux => {
-            linux.initialize(update) catch @panic("window init failed");
-        },
-        else => {
-            @panic("unsupported target");
-        },
-    }
 }

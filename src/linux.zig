@@ -1,10 +1,11 @@
 const std = @import("std");
+const whey = @import("whey.zig");
 // const xlib = @import("Xlib.zig");
 const xlib = @cImport({
     @cInclude("X11/Xlib.h");
 });
 
-pub fn initialize(update: *const fn () callconv(.C) void) !void {
+pub fn initialize(update: *const fn (delta_time: f32, event: whey.Event) callconv(.C) void) !void {
     const display = xlib.XOpenDisplay(null);
     if (display == null) {
         return error.xliberror;
@@ -30,7 +31,7 @@ pub fn initialize(update: *const fn () callconv(.C) void) !void {
         if (event.type == xlib.KeyPress) {
             break;
         }
-        update();
+        update(0.0, whey.Event.None);
     }
 
     _ = xlib.XCloseDisplay(display);

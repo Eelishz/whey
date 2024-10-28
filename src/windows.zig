@@ -1,5 +1,6 @@
 const std = @import("std");
 const windows = std.os.windows;
+const whey = @import("whey.zig");
 
 const ClassStyle = extern struct {
     const byte_align_client: windows.UINT = 0x1000;
@@ -100,7 +101,7 @@ fn window_procedure(handle: windows.HWND, message: windows.UINT, w_param: window
     return 0;
 }
 
-pub fn initialize(update: *const fn () callconv(.C) void, instance: windows.HINSTANCE, cmd_show: windows.INT) !void {
+pub fn initialize(update: whey.update_fn, instance: windows.HINSTANCE, cmd_show: windows.INT) !void {
     const class_name = "main_window";
     const window_class: WindowClassExA = .{
         .style = 0,
@@ -116,7 +117,7 @@ pub fn initialize(update: *const fn () callconv(.C) void, instance: windows.HINS
     while (GetMessageA(&message, null, 0, 0) > 0) {
         _ = TranslateMessage(&message);
         _ = DispatchMessageA(&message);
-        update();
+        update(0.0, whey.Event.None);
     }
 
     return;
