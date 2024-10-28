@@ -2,6 +2,42 @@ const std = @import("std");
 const windows = std.os.windows;
 const whey = @import("whey.zig");
 
+const PIXELFORMATDESCRIPTOR = extern struct {
+    nSize: windows.WORD = 0,
+    nVersion: windows.WORD = 1,
+    dwFlags: windows.DWORD = PFD.DRAW_TO_WINDOW | PFD.SUPPORT_OPENGL | PFD.DOUBLEBUFFER,
+    iPixelType: windows.BYTE = PFD.TYPE_RGBA,
+    cColorBits: windows.BYTE = 32,
+    cRedBits: windows.BYTE = 0,
+    cRedShift: windows.BYTE = 0,
+    cGreenBits: windows.BYTE = 0,
+    cGreenShift: windows.BYTE = 0,
+    cBlueBits: windows.BYTE = 0,
+    cBlueShift: windows.BYTE = 0,
+    cAlphaBits: windows.BYTE = 0,
+    cAlphaShift: windows.BYTE = 0,
+    cAccumBits: windows.BYTE = 0,
+    cAccumRedBits: windows.BYTE = 0,
+    cAccumGreenBits: windows.BYTE = 0,
+    cAccumBlueBits: windows.BYTE = 0,
+    cAccumAlphaBits: windows.BYTE = 0,
+    cDepthBits: windows.BYTE = 24,
+    cStencilBits: windows.BYTE = 8,
+    cAuxBuffers: windows.BYTE = 0,
+    iLayerType: windows.BYTE = 0,
+    bReserved: windows.BYTE = 0,
+    dwLayerMask: windows.DWORD = 0,
+    dwVisibleMask: windows.DWORD = 0,
+    dwDamageMask: windows.DWORD = 0,
+};
+
+const PFD = extern struct {
+    const DRAW_TO_WINDOW: windows.DWORD = 0x4;
+    const SUPPORT_OPENGL: windows.DWORD = 0x20;
+    const DOUBLEBUFFER: windows.DWORD = 0x1;
+    const TYPE_RGBA: windows.BYTE = 0x0;
+};
+
 const ClassStyle = extern struct {
     const byte_align_client: windows.UINT = 0x1000;
     const byte_align_window: windows.UINT = 0x2000;
@@ -17,10 +53,10 @@ const ClassStyle = extern struct {
     const redraw_vertical: windows.UINT = 0x0001;
 };
 
-const Event = extern struct {
-    const close: windows.UINT = 0x0010;
-    const destroy: windows.UINT = 0x0002;
-    const create: windows.UINT = 0x0001;
+const Event = enum(windows.UINT) {
+    close = 0x0010,
+    destroy = 0x0002,
+    create = 0x0001,
 };
 
 const ExtendedWindowStyle = extern struct {
@@ -54,7 +90,7 @@ const MSG = extern struct {
 
 const WindowProcedure = *const fn (
     window_handle: windows.HWND,
-    message: windows.UINT,
+    message: Event,
     w_param: windows.WPARAM,
     l_param: windows.LPARAM,
 ) callconv(.C) windows.LRESULT;
@@ -86,17 +122,46 @@ extern "user32" fn DispatchMessageA(message: *const MSG) callconv(.C) windows.LR
 
 extern "user32" fn DefWindowProcA(
     handle: windows.HWND,
-    message: windows.UINT,
+    message: Event,
     w_param: windows.WPARAM,
     l_param: windows.LPARAM,
 ) windows.LRESULT;
 
 extern "user32" fn PostQuitMessage(message: windows.INT) callconv(.C) void;
 
-fn window_procedure(handle: windows.HWND, message: windows.UINT, w_param: windows.WPARAM, l_param: windows.LPARAM) callconv(.C) windows.LRESULT {
+extern "user32" fn GetDC(hwnd: windows.HWND) callconv(.C) ?windows.HDC;
+
+extern "gdi32" fn ChoosePixelFormat(hdc: windows.HDC, pfd: PIXELFORMATDESCRIPTOR) callconv(.C) windows.INT;
+
+extern "gdi32" fn SetPixelFormat(hdc: windows.HDC, format: windows.INT, pfd: PIXELFORMATDESCRIPTOR) callconv(.C) windows.BOOL;
+
+extern "gdi32" fn SwapBuffers(hdc: windows.HDC) callconv(.C) windows.BOOL;
+
+extern "opengl32" fn wglCreateContext(hdc: windows.HDC) callconv(.C) windows.HGLRC;
+
+extern "opengl32" fn wglMakeCurrent(hdc: windows.HDC, hglrc: windows.HGLRC) callconv(.C) windows.BOOL;
+
+extern "opengl32" fn wglDeleteContext(hglrc: windows.HGLRC) callconv(.C) windows.BOOL;
+
+extern "opengl32" fn wglGetProcAddress(proc: [*:0]const u8) callconv(.C) ?*anyopaque;
+
+fn window_procedure(hwnd: windows.HWND, message: Event, w_param: windows.WPARAM, l_param: windows.LPARAM) callconv(.C) windows.LRESULT {
     switch (message) {
-        Event.destroy => PostQuitMessage(0),
-        else => return DefWindowProcA(handle, message, w_param, l_param),
+        .create => {
+            const hdc = GetDC(hwnd) orelse @panic("Failed to create device context");
+            const pfd = PIXELFORMATDESCRIPTOR{};
+            const pf = ChoosePixelFormat(hdc, pfd);
+            std.debug.assert(SetPixelFormat(hdc, pf, pfd) != windows.FALSE);
+            const ctx = wglCreateContext(hdc);
+            std.debug.assert(wglMakeCurrent(hdc, ctx) != windows.FALSE);
+
+            const getIntegerv = @as(*const fn (u32, *i32) callconv(.C) void, @ptrCast(@alignCast(wglGetProcAddress("glGetIntegerv"))));
+            var version: i32 = 0;
+            getIntegerv(0x821B, &version);
+            std.debug.print("Major version: {d}\n", .{version});
+        },
+        .destroy => PostQuitMessage(0),
+        else => return DefWindowProcA(hwnd, message, w_param, l_param),
     }
     return 0;
 }
