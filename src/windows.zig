@@ -2,12 +2,19 @@ const std = @import("std");
 const windows = std.os.windows;
 const whey = @import("whey.zig");
 
+const PFD = extern struct {
+    const DRAW_TO_WINDOW: windows.DWORD = 0x4;
+    const SUPPORT_OPENGL: windows.DWORD = 0x20;
+    const DOUBLEBUFFER: windows.DWORD = 0x1;
+    const TYPE_RGBA: windows.BYTE = 0x0;
+};
+
 const PIXELFORMATDESCRIPTOR = extern struct {
-    nSize: windows.WORD = 0,
-    nVersion: windows.WORD = 1,
-    dwFlags: windows.DWORD = PFD.DRAW_TO_WINDOW | PFD.SUPPORT_OPENGL | PFD.DOUBLEBUFFER,
-    iPixelType: windows.BYTE = PFD.TYPE_RGBA,
-    cColorBits: windows.BYTE = 32,
+    nSize: windows.WORD = @sizeOf(PIXELFORMATDESCRIPTOR),
+    nVersion: windows.WORD = 0,
+    dwFlags: windows.DWORD = 0,
+    iPixelType: windows.BYTE = 0,
+    cColorBits: windows.BYTE = 0,
     cRedBits: windows.BYTE = 0,
     cRedShift: windows.BYTE = 0,
     cGreenBits: windows.BYTE = 0,
@@ -21,21 +28,14 @@ const PIXELFORMATDESCRIPTOR = extern struct {
     cAccumGreenBits: windows.BYTE = 0,
     cAccumBlueBits: windows.BYTE = 0,
     cAccumAlphaBits: windows.BYTE = 0,
-    cDepthBits: windows.BYTE = 24,
-    cStencilBits: windows.BYTE = 8,
+    cDepthBits: windows.BYTE = 0,
+    cStencilBits: windows.BYTE = 0,
     cAuxBuffers: windows.BYTE = 0,
     iLayerType: windows.BYTE = 0,
     bReserved: windows.BYTE = 0,
     dwLayerMask: windows.DWORD = 0,
     dwVisibleMask: windows.DWORD = 0,
     dwDamageMask: windows.DWORD = 0,
-};
-
-const PFD = extern struct {
-    const DRAW_TO_WINDOW: windows.DWORD = 0x4;
-    const SUPPORT_OPENGL: windows.DWORD = 0x20;
-    const DOUBLEBUFFER: windows.DWORD = 0x1;
-    const TYPE_RGBA: windows.BYTE = 0x0;
 };
 
 const ClassStyle = extern struct {
@@ -57,6 +57,7 @@ const Event = enum(windows.UINT) {
     close = 0x0010,
     destroy = 0x0002,
     create = 0x0001,
+    _,
 };
 
 const ExtendedWindowStyle = extern struct {
@@ -129,15 +130,15 @@ extern "user32" fn DefWindowProcA(
 
 extern "user32" fn PostQuitMessage(message: windows.INT) callconv(.C) void;
 
-extern "user32" fn GetDC(hwnd: windows.HWND) callconv(.C) ?windows.HDC;
+extern "user32" fn GetDC(hWnd: windows.HWND) callconv(.C) ?windows.HDC;
 
-extern "gdi32" fn ChoosePixelFormat(hdc: windows.HDC, pfd: PIXELFORMATDESCRIPTOR) callconv(.C) windows.INT;
+extern "gdi32" fn ChoosePixelFormat(hdc: windows.HDC, pfd: *PIXELFORMATDESCRIPTOR) callconv(.C) windows.INT;
 
-extern "gdi32" fn SetPixelFormat(hdc: windows.HDC, format: windows.INT, pfd: PIXELFORMATDESCRIPTOR) callconv(.C) windows.BOOL;
+extern "gdi32" fn SetPixelFormat(hdc: windows.HDC, format: windows.INT, pfd: *PIXELFORMATDESCRIPTOR) callconv(.C) windows.BOOL;
 
 extern "gdi32" fn SwapBuffers(hdc: windows.HDC) callconv(.C) windows.BOOL;
 
-extern "opengl32" fn wglCreateContext(hdc: windows.HDC) callconv(.C) windows.HGLRC;
+extern "opengl32" fn wglCreateContext(hdc: windows.HDC) callconv(.C) ?windows.HGLRC;
 
 extern "opengl32" fn wglMakeCurrent(hdc: windows.HDC, hglrc: windows.HGLRC) callconv(.C) windows.BOOL;
 
@@ -145,23 +146,31 @@ extern "opengl32" fn wglDeleteContext(hglrc: windows.HGLRC) callconv(.C) windows
 
 extern "opengl32" fn wglGetProcAddress(proc: [*:0]const u8) callconv(.C) ?*anyopaque;
 
-fn window_procedure(hwnd: windows.HWND, message: Event, w_param: windows.WPARAM, l_param: windows.LPARAM) callconv(.C) windows.LRESULT {
+extern "opengl32" fn wglGetCurrentContext() callconv(.C) ?windows.HGLRC;
+
+extern "user32" fn GetLastError() callconv(.C) windows.DWORD;
+
+fn window_procedure(hWnd: windows.HWND, message: Event, w_param: windows.WPARAM, l_param: windows.LPARAM) callconv(.C) windows.LRESULT {
     switch (message) {
         .create => {
-            const hdc = GetDC(hwnd) orelse @panic("Failed to create device context");
-            const pfd = PIXELFORMATDESCRIPTOR{};
-            const pf = ChoosePixelFormat(hdc, pfd);
-            std.debug.assert(SetPixelFormat(hdc, pf, pfd) != windows.FALSE);
-            const ctx = wglCreateContext(hdc);
-            std.debug.assert(wglMakeCurrent(hdc, ctx) != windows.FALSE);
-
-            const getIntegerv = @as(*const fn (u32, *i32) callconv(.C) void, @ptrCast(@alignCast(wglGetProcAddress("glGetIntegerv"))));
-            var version: i32 = 0;
-            getIntegerv(0x821B, &version);
-            std.debug.print("Major version: {d}\n", .{version});
+            const hdc = GetDC(hWnd) orelse @panic("Failed to obtain device context");
+            var pfd: PIXELFORMATDESCRIPTOR = .{
+                .nVersion = 1,
+                .dwFlags = PFD.DRAW_TO_WINDOW | PFD.SUPPORT_OPENGL | PFD.DOUBLEBUFFER,
+                .iPixelType = PFD.TYPE_RGBA,
+                .cColorBits = 32,
+                .cDepthBits = 24,
+                .cStencilBits = 8,
+            };
+            const pf = ChoosePixelFormat(hdc, &pfd);
+            _ = SetPixelFormat(hdc, pf, &pfd);
+            const hglrc = wglCreateContext(hdc) orelse @panic("failed to create opengl context");
+            const res = wglMakeCurrent(hdc, hglrc);
+            std.debug.assert(res == windows.TRUE);
+            _ = wglGetProcAddress("glBufferData") orelse @panic("no such function");
         },
         .destroy => PostQuitMessage(0),
-        else => return DefWindowProcA(hwnd, message, w_param, l_param),
+        else => return DefWindowProcA(hWnd, message, w_param, l_param),
     }
     return 0;
 }
@@ -169,13 +178,13 @@ fn window_procedure(hwnd: windows.HWND, message: Event, w_param: windows.WPARAM,
 pub fn initialize(update: whey.update_fn, instance: windows.HINSTANCE, cmd_show: windows.INT) !void {
     const class_name = "main_window";
     const window_class: WindowClassExA = .{
-        .style = 0,
+        .style = ClassStyle.own_device_context,
         .window_procedure = window_procedure,
         .instance = instance,
         .class_name = class_name,
     };
     _ = RegisterClassExA(window_class);
-    const handle = CreateWindowExA(0, class_name, "Hello Window!", 0, 0, 0, 0, 0, null, null, null, null);
+    const handle = CreateWindowExA(0, class_name, "Hello Window!", 0, 0, 0, 200, 200, null, null, null, null);
     _ = ShowWindow(handle, cmd_show);
 
     var message: MSG = undefined;
