@@ -150,6 +150,8 @@ extern "opengl32" fn wglGetCurrentContext() callconv(.C) ?windows.HGLRC;
 
 extern "user32" fn GetLastError() callconv(.C) windows.DWORD;
 
+extern "opengl32" fn glGetIntegerv(pname: u32, data: *i32) callconv(.C) void;
+
 fn window_procedure(hWnd: windows.HWND, message: Event, w_param: windows.WPARAM, l_param: windows.LPARAM) callconv(.C) windows.LRESULT {
     switch (message) {
         .create => {
@@ -167,6 +169,9 @@ fn window_procedure(hWnd: windows.HWND, message: Event, w_param: windows.WPARAM,
             const hglrc = wglCreateContext(hdc) orelse @panic("failed to create opengl context");
             const res = wglMakeCurrent(hdc, hglrc);
             std.debug.assert(res == windows.TRUE);
+            var version: i32 = undefined;
+            glGetIntegerv(0x821b, &version);
+            std.debug.print("opengl version: {}\n", .{version});
             _ = wglGetProcAddress("glBufferData") orelse @panic("no such function");
         },
         .destroy => PostQuitMessage(0),
