@@ -1,6 +1,7 @@
 const std = @import("std");
 const windows = std.os.windows;
 const whey = @import("whey.zig");
+const gl = @import("gl.zig");
 
 const PFD = extern struct {
     const DRAW_TO_WINDOW: windows.DWORD = 0x4;
@@ -172,7 +173,8 @@ fn window_procedure(hWnd: windows.HWND, message: Event, w_param: windows.WPARAM,
             var version: i32 = undefined;
             glGetIntegerv(0x821b, &version);
             std.debug.print("opengl version: {}\n", .{version});
-            _ = wglGetProcAddress("glBufferData") orelse @panic("no such function");
+            const glBufferData = gl.get_proc_address("glBufferData");
+            glBufferData();
         },
         .destroy => PostQuitMessage(0),
         else => return DefWindowProcA(hWnd, message, w_param, l_param),
