@@ -18,18 +18,20 @@ pub fn build(b: *std.Build) void {
         .optimize = optimize,
     });
 
-    exe.linkLibrary(libwhey);
+    libwhey.addIncludePath(.{ .cwd_relative = "include/" });
+    exe.addIncludePath(.{ .cwd_relative = "include/" });
 
     switch (target.result.os.tag) {
         .linux => {
             libwhey.linkLibC();
             libwhey.addIncludePath(.{ .src_path = .{ .sub_path = "/usr/include/", .owner = b } });
             exe.linkSystemLibrary("X11");
-            exe.linkLibC();
         },
         .windows => exe.linkSystemLibrary("user32"),
         else => {},
     }
+
+    exe.linkLibrary(libwhey);
 
     b.installArtifact(libwhey);
     b.installArtifact(exe);

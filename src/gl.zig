@@ -1,54 +1,45 @@
 const std = @import("std");
+const builtin = @import("builtin");
+
 const glcorearb = @cImport({
-    @cInclude("include/glcorearb.h");
+    @cDefine("GL_GLEXT_PROTOTYPES", "1");
+    @cDefine("__CYGWIN__", "1");
+    @cInclude("glcorearb.h");
 });
 
-extern "opengl32" fn wglGetProcAddress(proc: [*:0]const u8) callconv(.C) ?*anyopaque;
+extern "opengl32" fn wglGetProcAddress(name: [*:0]const u8) callconv(.C) ?*anyopaque;
 
-const proc_type_entry = struct { k: []const u8, v: type };
+pub const glapi = glcorearb;
 
-const gl_proc_types = [1]proc_type_entry{
-    .{ .k = "glBufferData", .v = (*const fn (u32, usize, *anyopaque, u32) callconv(.C) void) },
+pub const GlProc = struct {
+    glCreateShader: *fn (glapi.GLenum) callconv(.C) u32,
+    glShaderSource: *fn (u32, isize, **c_char, *i32) callconv(.C) void,
+    glCompileShader: *fn (u32) callconv(.C) void,
+    glDrawArrays: *fn (u32, i32, isize) callconv(.C) void,
+    glGenBuffers: *fn (glapi.GLsizei, *glapi.GLuint) callconv(.C) void,
+    glBindBuffer: *fn (u32, u32) callconv(.C) void,
+    glBufferData: *fn (glapi.GLenum, glapi.GLsizeiptr, *const anyopaque, glapi.GLenum) callconv(.C) void,
+    glEnableVertexAttribArray: *fn (u32) callconv(.C) void,
+    glDisableVertexAttribArray: *fn (u32) callconv(.C) void,
+    glVertexAttribPointer: *fn (glapi.GLuint, glapi.GLint, glapi.GLenum, glapi.GLboolean, glapi.GLsizei, ?*const anyopaque) void,
+
+    pub fn load_all() GlProc {
+        var glproc: GlProc = undefined;
+
+        inline for (std.meta.fields(GlProc)) |f| {
+            @field(glproc, f.name) = get_proc_fn_ptr(f.name, f.type);
+        }
+
+        return glproc;
+    }
 };
 
-fn strcmp(a: [*:0]const u8, b: []const u8) bool {
-    const len_a = std.mem.len(a);
-    const len_b = b.len;
+fn get_proc_fn_ptr(proc: [*:0]const u8, T: type) T {
+    const gl_get_proc_address = switch (builtin.os.tag) {
+        .windows => wglGetProcAddress,
+        else => @compileError("unimplemented"),
+    };
 
-    if (len_a != len_b) {
-        return false;
-    }
-
-    var i = 0;
-    while (i < len_a) {
-        const ca = a[i];
-        const cb = b[i];
-        std.debug.assert(ca != 0);
-
-        if (ca != cb) {
-            return false;
-        }
-
-        i += 1;
-    }
-    return true;
-}
-
-fn get_proc_type(comptime proc: [*:0]const u8) !type {
-    // TODO: this is O(1) and could be
-    // improved if compile times get long.
-    // A static hashmap would be fairly
-    // easy to implement.
-    for (gl_proc_types) |entry| {
-        if (strcmp(proc, entry.k)) {
-            return entry.v;
-        }
-    }
-    return error.typenotfound;
-}
-
-pub fn get_proc_address(comptime proc: [*:0]const u8) (get_proc_type(proc) catch @compileError("unable to lookup gl type")) {
-    const T = try get_proc_type(proc);
-    const fnptr = wglGetProcAddress(proc);
+    const fnptr = gl_get_proc_address(proc);
     return @as(T, @ptrCast(fnptr));
 }

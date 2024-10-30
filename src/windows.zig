@@ -2,6 +2,7 @@ const std = @import("std");
 const windows = std.os.windows;
 const whey = @import("whey.zig");
 const gl = @import("gl.zig");
+const glapi = gl.glapi;
 
 const PFD = extern struct {
     const DRAW_TO_WINDOW: windows.DWORD = 0x4;
@@ -153,10 +154,36 @@ extern "user32" fn GetLastError() callconv(.C) windows.DWORD;
 
 extern "opengl32" fn glGetIntegerv(pname: u32, data: *i32) callconv(.C) void;
 
+fn hello_trangle(glproc: gl.GlProc) void {
+    const vertices = [9]f32{
+        -0.5, -0.5, 0.0,
+        0.5,  -0.5, 0.0,
+        0.0,  0.5,  0.0,
+    };
+
+    var vbo: glapi.GLuint = undefined;
+    glproc.glGenBuffers(1, &vbo);
+    glproc.glBindBuffer(glapi.GL_ARRAY_BUFFER, vbo);
+    glproc.glBufferData(glapi.GL_ARRAY_BUFFER, @sizeOf(f32) * vertices.len, &vertices, glapi.GL_STATIC_DRAW);
+
+    glapi.glClear(glapi.GL_COLOR_BUFFER_BIT);
+    glproc.glEnableVertexAttribArray(0);
+    glproc.glVertexAttribPointer(0, 3, glapi.GL_FLOAT, glapi.GL_FALSE, 0, null);
+    glproc.glDrawArrays(glapi.GL_TRIANGLES, 0, 3);
+    glproc.glDisableVertexAttribArray(0);
+    _ = SwapBuffers(hdc);
+
+    // const vertex_shader = glproc.glCreateShader(glapi.GL_VERTEX_SHADER);
+    //
+    // glproc.glShaderSource(vertex_shader, 1, &vertex_shader_source, null);
+    // glproc.glCompileShader(vertex_shader);
+}
+
+var hdc: windows.HDC = undefined;
 fn window_procedure(hWnd: windows.HWND, message: Event, w_param: windows.WPARAM, l_param: windows.LPARAM) callconv(.C) windows.LRESULT {
     switch (message) {
         .create => {
-            const hdc = GetDC(hWnd) orelse @panic("Failed to obtain device context");
+            hdc = GetDC(hWnd) orelse @panic("Failed to obtain device context");
             var pfd: PIXELFORMATDESCRIPTOR = .{
                 .nVersion = 1,
                 .dwFlags = PFD.DRAW_TO_WINDOW | PFD.SUPPORT_OPENGL | PFD.DOUBLEBUFFER,
@@ -172,9 +199,9 @@ fn window_procedure(hWnd: windows.HWND, message: Event, w_param: windows.WPARAM,
             std.debug.assert(res == windows.TRUE);
             var version: i32 = undefined;
             glGetIntegerv(0x821b, &version);
-            std.debug.print("opengl version: {}\n", .{version});
-            const glBufferData = gl.get_proc_address("glBufferData");
-            glBufferData();
+            std.debug.print("opengl major version: {}\n", .{version});
+            const glproc = gl.GlProc.load_all();
+            hello_trangle(glproc);
         },
         .destroy => PostQuitMessage(0),
         else => return DefWindowProcA(hWnd, message, w_param, l_param),
@@ -191,7 +218,7 @@ pub fn initialize(update: whey.update_fn, instance: windows.HINSTANCE, cmd_show:
         .class_name = class_name,
     };
     _ = RegisterClassExA(window_class);
-    const handle = CreateWindowExA(0, class_name, "Hello Window!", 0, 0, 0, 200, 200, null, null, null, null);
+    const handle = CreateWindowExA(0, class_name, "Hello Window!", 0, 0, 0, 1280, 720, null, null, null, null);
     _ = ShowWindow(handle, cmd_show);
 
     var message: MSG = undefined;
