@@ -15,7 +15,7 @@ pub const GlProc = struct {
     glCreateShader: *fn (glapi.GLenum) callconv(.C) u32,
     glShaderSource: *fn (u32, isize, **c_char, *i32) callconv(.C) void,
     glCompileShader: *fn (u32) callconv(.C) void,
-    glDrawArrays: *fn (u32, i32, isize) callconv(.C) void,
+    // glDrawArrays: *fn (u32, i32, isize) callconv(.C) void,
     glGenBuffers: *fn (glapi.GLsizei, *glapi.GLuint) callconv(.C) void,
     glBindBuffer: *fn (u32, u32) callconv(.C) void,
     glBufferData: *fn (glapi.GLenum, glapi.GLsizeiptr, *const anyopaque, glapi.GLenum) callconv(.C) void,
@@ -40,6 +40,10 @@ fn get_proc_fn_ptr(proc: [*:0]const u8, T: type) T {
         else => @compileError("unimplemented"),
     };
 
-    const fnptr = gl_get_proc_address(proc);
+    const fnptr = gl_get_proc_address(proc) orelse {
+        std.log.err("could not load {s}", .{proc});
+        @panic("failed to get glproc");
+    };
+
     return @as(T, @ptrCast(fnptr));
 }

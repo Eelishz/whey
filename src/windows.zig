@@ -169,7 +169,7 @@ fn hello_trangle(glproc: gl.GlProc) void {
     glapi.glClear(glapi.GL_COLOR_BUFFER_BIT);
     glproc.glEnableVertexAttribArray(0);
     glproc.glVertexAttribPointer(0, 3, glapi.GL_FLOAT, glapi.GL_FALSE, 0, null);
-    glproc.glDrawArrays(glapi.GL_TRIANGLES, 0, 3);
+    glapi.glDrawArrays(glapi.GL_TRIANGLES, 0, 3);
     glproc.glDisableVertexAttribArray(0);
     _ = SwapBuffers(hdc);
 
