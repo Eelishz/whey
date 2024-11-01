@@ -154,7 +154,7 @@ extern "user32" fn GetLastError() callconv(.C) windows.DWORD;
 
 extern "opengl32" fn glGetIntegerv(pname: u32, data: *i32) callconv(.C) void;
 
-fn hello_trangle(glproc: gl.GlProc) void {
+fn hello_trangle() void {
     const vertices = [9]f32{
         -0.5, -0.5, 0.0,
         0.5,  -0.5, 0.0,
@@ -165,13 +165,9 @@ fn hello_trangle(glproc: gl.GlProc) void {
     glproc.glGenBuffers(1, &vbo);
     glproc.glBindBuffer(glapi.GL_ARRAY_BUFFER, vbo);
     glproc.glBufferData(glapi.GL_ARRAY_BUFFER, @sizeOf(f32) * vertices.len, &vertices, glapi.GL_STATIC_DRAW);
-
-    glapi.glClear(glapi.GL_COLOR_BUFFER_BIT);
     glproc.glEnableVertexAttribArray(0);
     glproc.glVertexAttribPointer(0, 3, glapi.GL_FLOAT, glapi.GL_FALSE, 0, null);
-    glapi.glDrawArrays(glapi.GL_TRIANGLES, 0, 3);
-    glproc.glDisableVertexAttribArray(0);
-    _ = SwapBuffers(hdc);
+    // glproc.glDisableVertexAttribArray(0);
 
     // const vertex_shader = glproc.glCreateShader(glapi.GL_VERTEX_SHADER);
     //
@@ -179,7 +175,14 @@ fn hello_trangle(glproc: gl.GlProc) void {
     // glproc.glCompileShader(vertex_shader);
 }
 
+fn render() void {
+    glapi.glClear(glapi.GL_COLOR_BUFFER_BIT);
+    glapi.glDrawArrays(glapi.GL_TRIANGLES, 0, 3);
+    _ = SwapBuffers(hdc);
+}
+
 var hdc: windows.HDC = undefined;
+var glproc: gl.GlProc = undefined;
 fn window_procedure(hWnd: windows.HWND, message: Event, w_param: windows.WPARAM, l_param: windows.LPARAM) callconv(.C) windows.LRESULT {
     switch (message) {
         .create => {
@@ -200,8 +203,8 @@ fn window_procedure(hWnd: windows.HWND, message: Event, w_param: windows.WPARAM,
             var version: i32 = undefined;
             glGetIntegerv(0x821b, &version);
             std.debug.print("opengl major version: {}\n", .{version});
-            const glproc = gl.GlProc.load_all();
-            hello_trangle(glproc);
+            glproc = gl.GlProc.load_all();
+            hello_trangle();
         },
         .destroy => PostQuitMessage(0),
         else => return DefWindowProcA(hWnd, message, w_param, l_param),
@@ -225,6 +228,7 @@ pub fn initialize(update: whey.update_fn, instance: windows.HINSTANCE, cmd_show:
     while (GetMessageA(&message, null, 0, 0) > 0) {
         _ = TranslateMessage(&message);
         _ = DispatchMessageA(&message);
+        render();
         update(0.0, whey.Event.None);
     }
 
